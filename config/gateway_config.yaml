@@ -1,0 +1,70 @@
+# ============================================================================
+#  LLM Security Gateway — Final Lab Configuration
+#  CSC 262 Artificial Intelligence | Robust Multilingual Security Gateway
+#
+#  Every threshold the gateway uses is defined here. Nothing security-relevant
+#  is hard-coded in the Python modules — change a number here and re-run.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Injection detection thresholds
+# ---------------------------------------------------------------------------
+detection:
+  # Rule-based detector (regex / keyword layer — fast first pass)
+  rule_block_threshold: 0.75      # rule_score >= this  -> contributes a BLOCK signal
+  rule_warn_threshold: 0.40       # rule_score >= this  -> MEDIUM risk
+
+  # Semantic / ML detector (TF-IDF + Logistic Regression)
+  semantic_block_threshold: 0.60  # semantic_score >= this -> contributes a BLOCK signal
+  semantic_warn_threshold: 0.45   # semantic_score >= this -> MEDIUM risk
+
+  # How the two detectors are fused into one injection risk.
+  # "max"      -> injection_risk = max(rule, semantic)   (default, high recall)
+  # "weighted" -> injection_risk = rule*rule_weight + semantic*semantic_weight
+  fusion_mode: "max"
+  rule_weight: 0.45
+  semantic_weight: 0.55
+
+# ---------------------------------------------------------------------------
+# Risk formula
+#   final_risk = clamp( injection_risk + pii_weight + secret_weight , 0, 1 )
+#   where injection_risk is produced by the fusion above.
+# ---------------------------------------------------------------------------
+risk_formula:
+  pii_weight: 0.10        # added when ordinary PII is present
+  secret_weight: 0.35     # added when a secret/credential entity is present
+  composite_weight: 0.45  # added when a composite PII dump is detected
+
+# ---------------------------------------------------------------------------
+# Policy engine — final_risk -> decision
+# ---------------------------------------------------------------------------
+policy:
+  # 0.65 chosen from the Threshold Calibration table (Table 7): it gives the
+  # best precision/recall balance (precision ~0.97, recall ~0.96). Lower values
+  # raise recall but add benign false-positives; higher values miss paraphrased
+  # attacks whose cross-validated semantic score sits just under the line.
+  block_threshold: 0.65   # final_risk >= this                       -> BLOCK
+  mask_pii_score: 0.55    # a PII entity with score >= this is masked
+  # MASK is chosen when the prompt is benign (no injection) but carries PII.
+  # ALLOW is the default for clean low-risk prompts.
+
+# ---------------------------------------------------------------------------
+# Language handling
+# ---------------------------------------------------------------------------
+language:
+  supported: ["en", "ur", "ko"]   # English, Urdu, Korean (per final-lab spec)
+  default: "en"
+
+# ---------------------------------------------------------------------------
+# Audit logging
+# ---------------------------------------------------------------------------
+audit:
+  enabled: true
+  log_path: "results/audit_log.jsonl"   # one JSON object per request
+
+# ---------------------------------------------------------------------------
+# Semantic model artefacts
+# ---------------------------------------------------------------------------
+model:
+  semantic_model_path: "results/semantic_model.joblib"
+  dataset_path: "data/final_eval.csv"
